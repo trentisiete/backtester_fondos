@@ -4,5 +4,5 @@ numpy==1.26.4
 plotly==5.24.1
 matplotlib==3.8.4
 seaborn==0.13.2
-empyrical==0.5.11
+empyrical==0.5.5
 pypfopt==1.5.6
