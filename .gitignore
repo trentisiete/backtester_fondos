@@ -1,0 +1,10 @@
+# Ignorar archivos CSV
+*.csv
+
+# Ignorar archivos JSON
+*.json
+
+# Ignorar archivos de Python
+__pycache__/
+*.py[cod]
+*$py.class

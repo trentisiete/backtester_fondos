@@ -132,7 +132,7 @@ def run_backtest(data, weights_dict, initial_investment, start_date, end_date, r
 
     current_weights = weights_dict.copy()
     last_rebalance_date = prices.index[0]
-    
+
     # Costes de transacción
     total_transaction_costs_value = 0.0
     transaction_cost_rate = transaction_cost_bps / 10000.0 # Convertir bps a decimal
@@ -141,7 +141,7 @@ def run_backtest(data, weights_dict, initial_investment, start_date, end_date, r
     initial_alloc_value = {}
     shares = {}
     initial_turnover = 0 # Para el coste de la primera asignación
-    
+
     for fund in current_weights:
         initial_price = prices[fund].iloc[0]
         if pd.notna(initial_price) and initial_price != 0:
@@ -153,7 +153,7 @@ def run_backtest(data, weights_dict, initial_investment, start_date, end_date, r
             shares[fund] = 0
             initial_alloc_value[fund] = 0
             st.warning(f"Precio inicial inválido para {fund} en {prices.index[0].date()}. Peso inicial no aplicado.")
-    
+
     cost_initial_alloc = initial_turnover * transaction_cost_rate
     total_transaction_costs_value += cost_initial_alloc
     portfolio_value.loc[prices.index[0]] -= cost_initial_alloc # Deducir coste de la inversión inicial
@@ -165,20 +165,20 @@ def run_backtest(data, weights_dict, initial_investment, start_date, end_date, r
     for i in range(1, len(prices)):
         current_date = prices.index[i]
         prev_date = prices.index[i-1]
-        
+
         # Calcular valor de cartera antes de rebalanceo
         current_portfolio_value_before_rebal = 0.0
         for fund in shares:
             current_price = prices.loc[current_date, fund] if current_date in prices.index and pd.notna(prices.loc[current_date, fund]) else \
                             prices.loc[prev_date, fund] if prev_date in prices.index and pd.notna(prices.loc[prev_date, fund]) else np.nan
-            
+
             if pd.notna(current_price):
                 current_portfolio_value_before_rebal += shares[fund] * current_price
             else: # Si no hay precio actual ni previo, usar el valor de cartera del día anterior
                 current_portfolio_value_before_rebal = portfolio_value.loc[prev_date] if prev_date in portfolio_value else 0
                 st.warning(f"Usando valor de cartera previo para {current_date} debido a precio faltante para {fund}")
-                break 
-        
+                break
+
         if pd.isna(current_portfolio_value_before_rebal) or (current_portfolio_value_before_rebal == 0 and prev_date in portfolio_value and portfolio_value.loc[prev_date] != 0):
              current_portfolio_value_before_rebal = portfolio_value.loc[prev_date] if prev_date in portfolio_value and pd.notna(portfolio_value.loc[prev_date]) else 0
 
@@ -190,7 +190,7 @@ def run_backtest(data, weights_dict, initial_investment, start_date, end_date, r
             if pd.notna(current_portfolio_value_before_rebal) and current_portfolio_value_before_rebal > 0:
                 turnover_rebalance = 0
                 new_shares = {}
-                
+
                 # Calcular valor actual de cada activo antes de rebalancear
                 current_asset_values = {}
                 for fund in shares:
@@ -198,7 +198,7 @@ def run_backtest(data, weights_dict, initial_investment, start_date, end_date, r
                     if pd.notna(price_at_rebal):
                          current_asset_values[fund] = shares[fund] * price_at_rebal
                     else: # Si falta precio en rebalanceo, no se puede rebalancear ese activo
-                        current_asset_values[fund] = 0 
+                        current_asset_values[fund] = 0
                         new_shares[fund] = shares[fund] # Mantener participaciones antiguas
                         st.warning(f"Precio inválido para {fund} en rebalanceo {current_date}. No se rebalanceó este activo.")
 
@@ -213,13 +213,13 @@ def run_backtest(data, weights_dict, initial_investment, start_date, end_date, r
                         turnover_rebalance += abs(target_value_fund - current_asset_values.get(fund, 0))
                     elif fund not in new_shares: # Si no se pudo calcular antes y no está en new_shares
                         new_shares[fund] = shares.get(fund, 0) # Mantener participaciones si no se puede rebalancear
-                
+
                 shares = new_shares # Actualizar participaciones
-                
+
                 cost_this_rebalance = (turnover_rebalance / 2) * transaction_cost_rate # Se divide por 2 porque el turnover cuenta compras y ventas
                 total_transaction_costs_value += cost_this_rebalance
                 portfolio_value.loc[current_date] -= cost_this_rebalance # Deducir costes del valor de la cartera
-                
+
                 last_rebalance_date = current_date
             else:
                 st.warning(f"Valor de cartera inválido ({current_portfolio_value_before_rebal}) en rebalanceo {current_date}. Omitido.")
@@ -236,20 +236,20 @@ def calculate_metrics(portfolio_value, portfolio_returns, risk_free_rate_annual=
     end_value = portfolio_value.iloc[-1]
     total_return = (end_value / start_value) - 1 if start_value != 0 else 0
     metrics['Rentabilidad Total'] = total_return
-    
+
     years = (portfolio_value.index[-1] - portfolio_value.index[0]).days / 365.25
     if years <= 0 or start_value <= 0: cagr = 0
     else:
         base = end_value / start_value
         cagr = (base ** (1 / years)) - 1 if base > 0 else -1.0 # Manejar caso de pérdida total
     metrics['Rentabilidad Anualizada (CAGR)'] = cagr
-    
+
     volatility = portfolio_returns.std() * np.sqrt(252) if not portfolio_returns.empty else 0
     metrics['Volatilidad Anualizada'] = volatility
-    
+
     sharpe_ratio = (cagr - risk_free_rate_annual) / volatility if volatility != 0 else np.nan
     metrics['Ratio de Sharpe'] = sharpe_ratio
-    
+
     rolling_max = portfolio_value.cummax()
     daily_drawdown = portfolio_value / rolling_max - 1
     max_drawdown = daily_drawdown.min() if not daily_drawdown.empty else 0
@@ -273,9 +273,9 @@ def calculate_individual_metrics(fund_prices, risk_free_rate_annual=0.0):
                            'Máximo Drawdown': np.nan, 'Sortino Ratio': np.nan}
             individual_metrics[fund_name] = metrics_nan
             continue
-        
+
         metrics = calculate_metrics(fund_series, fund_ret_series, risk_free_rate_annual)
-        
+
         # CORRECCIÓN: Pasar tasa diaria a calculate_sortino_ratio
         daily_rf_for_individual_sortino = (1 + risk_free_rate_annual)**(1/252) - 1 if risk_free_rate_annual != 0 else 0.0
         metrics['Sortino Ratio'] = calculate_sortino_ratio(fund_ret_series, daily_required_return_for_empyrical=daily_rf_for_individual_sortino)
@@ -303,14 +303,14 @@ def calculate_sortino_ratio(returns, daily_required_return_for_empyrical=0.0):
     # CORRECCIÓN: Convertir a pd.Series si es np.ndarray para un manejo uniforme y evitar AttributeError
     if isinstance(returns, np.ndarray):
         if returns.size == 0: # Si el array NumPy está vacío
-            returns = pd.Series(dtype=float) 
+            returns = pd.Series(dtype=float)
         else:
             returns = pd.Series(returns)
 
     # Comprobaciones iniciales después de asegurar que 'returns' es una Serie (o None)
     if returns is None or returns.empty or returns.isnull().all():
         return np.nan
-    
+
     # Asegurar que los retornos sean numéricos y finitos después de la conversión y antes de empyrical
     # Empyrical puede manejar Series con NaNs, pero es mejor limpiarlos antes si es posible.
     returns_cleaned = pd.to_numeric(returns, errors='coerce').dropna()
@@ -318,20 +318,20 @@ def calculate_sortino_ratio(returns, daily_required_return_for_empyrical=0.0):
         return np.nan
     if len(returns_cleaned) < 2: # Necesita al menos 2 puntos para calcular std dev en empyrical
         return np.nan
-        
+
     try:
         # empyrical.sortino_ratio toma retornos y tasa requerida en la misma frecuencia (diaria aquí)
         # y luego anualiza el ratio final si se especifica 'annualization'.
-        sortino = empyrical.sortino_ratio(returns_cleaned, 
-                                          required_return=daily_required_return_for_empyrical, 
+        sortino = empyrical.sortino_ratio(returns_cleaned,
+                                          required_return=daily_required_return_for_empyrical,
                                           annualization=252)
         return sortino if np.isfinite(sortino) else np.nan
-    except Exception: 
+    except Exception:
         # Fallback manual (simplificado, ya que empyrical es preferido)
         returns_arr = returns_cleaned.values
-        
+
         downside_returns = returns_arr[returns_arr < daily_required_return_for_empyrical]
-        
+
         if downside_returns.size == 0:
             mean_daily_ret = np.mean(returns_arr)
             if mean_daily_ret > daily_required_return_for_empyrical: return np.inf
@@ -339,8 +339,8 @@ def calculate_sortino_ratio(returns, daily_required_return_for_empyrical=0.0):
 
         mean_daily_portfolio_return = np.mean(returns_arr)
         target_downside_dev_daily = np.sqrt(np.mean(np.square(downside_returns - daily_required_return_for_empyrical)))
-        
-        if target_downside_dev_daily == 0: 
+
+        if target_downside_dev_daily == 0:
             return np.inf if mean_daily_portfolio_return > daily_required_return_for_empyrical else 0.0
 
         sortino_daily = (mean_daily_portfolio_return - daily_required_return_for_empyrical) / target_downside_dev_daily
@@ -368,7 +368,7 @@ def calculate_rolling_correlation(returns, window, pair_list=None):
                     rolling_corr_pairs.loc[:, f'{col1} vs {col2}'] = returns[col1].rolling(window=window).corr(returns[col2])
                 except Exception as e: st.warning(f"Corr rodante {col1} vs {col2} falló: {e}")
         rolling_corr_pairs = rolling_corr_pairs.dropna(how='all')
-    
+
     rolling_corr_avg = None
     try:
         # Calcular la media de las correlaciones por pares (off-diagonal)
@@ -381,7 +381,7 @@ def calculate_rolling_correlation(returns, window, pair_list=None):
                     avg_corrs.append(matrix_slice.values[np.triu_indices_from(matrix_slice.values, k=1)].mean())
                 else:
                     avg_corrs.append(np.nan) # O 1.0 si solo hay un activo, pero aquí esperamos múltiples
-            
+
             if avg_corrs:
                  rolling_corr_avg = pd.Series(avg_corrs, index=rolling_corr_matrices.index.get_level_values(0).unique())
                  rolling_corr_avg.name = "Correlación Promedio Rodante"
@@ -392,41 +392,41 @@ def calculate_rolling_correlation(returns, window, pair_list=None):
 def calculate_risk_contribution(returns, weights_dict):
     if returns is None or returns.empty or not weights_dict or returns.isnull().values.any():
         return pd.Series(dtype=float)
-    
+
     funds = list(weights_dict.keys())
     funds_in_returns = [f for f in funds if f in returns.columns]
     if not funds_in_returns: return pd.Series(dtype=float)
-    
+
     weights_dict_adj = {f: weights_dict[f] for f in funds_in_returns}
     funds_adj = funds_in_returns
     weights_adj = np.array([weights_dict_adj[f] for f in funds_adj])
-    
+
     total_weight_adj = weights_adj.sum()
     if total_weight_adj <= 1e-9: return pd.Series(dtype=float) # Evitar división por cero
     weights_norm_adj = weights_adj / total_weight_adj # Normalizar pesos
-    
+
     returns_subset = returns[funds_adj].dropna() # Asegurar que no hay NaNs en los retornos usados
     if returns_subset.shape[0] < 2: return pd.Series(dtype=float) # Necesita al menos 2 puntos para covarianza
 
     try:
         cov_matrix = returns_subset.cov() * 252
         if cov_matrix.isnull().values.any(): return pd.Series(dtype=float)
-        
+
         portfolio_var = weights_norm_adj.T @ cov_matrix @ weights_norm_adj
         if portfolio_var <= 1e-10: # Si la varianza es casi cero, la contribución es proporcional al peso
             return pd.Series({fund: weights_norm_adj[i] for i, fund in enumerate(funds_adj)}, name="Contribución al Riesgo (%)")
-            
+
         portfolio_vol = np.sqrt(portfolio_var)
-        
+
         # Contribución Marginal al Riesgo (MCTR) = Cov(Ri, Rp) / Sigma_p = (Cov_matrix @ w) / Sigma_p
         mctr = (cov_matrix.values @ weights_norm_adj) / portfolio_vol
-        
+
         # Contribución Total al Riesgo (CCTR) = w_i * MCTR_i
         cctr = weights_norm_adj * mctr
-        
+
         # Contribución Porcentual al Riesgo = CCTR_i / Sigma_p (o CCTR_i / sum(CCTR) que es Sigma_p^2 / Sigma_p)
         risk_contribution_percent = cctr / portfolio_vol
-        
+
         risk_contribution_series = pd.Series(risk_contribution_percent, index=funds_adj, name="Contribución al Riesgo (%)")
         return risk_contribution_series.fillna(0.0)
     except Exception as e:
@@ -436,24 +436,24 @@ def calculate_risk_contribution(returns, weights_dict):
 def calculate_rolling_metrics(portfolio_returns, window, annual_risk_free_rate=0.0): # Renombrado para claridad
     if portfolio_returns is None or portfolio_returns.empty or window <= 1 or window > portfolio_returns.shape[0]:
         return None, None, None
-    
+
     rolling_vol = (portfolio_returns.rolling(window=window).std(ddof=1) * np.sqrt(252)).dropna()
     rolling_vol.name = f"Volatilidad Rodante ({window}d)"
-    
+
     # Rentabilidad anualizada rodante
     rolling_annual_ret = portfolio_returns.rolling(window=window).mean() * 252
-    
+
     rolling_sharpe = ((rolling_annual_ret - annual_risk_free_rate) / rolling_vol).replace([np.inf, -np.inf], np.nan).dropna()
     rolling_sharpe.name = f"Sharpe Rodante ({window}d)"
-    
+
     # CORRECCIÓN: Calcular tasa diaria para Sortino aquí
     daily_rf_for_rolling_sortino = (1 + annual_risk_free_rate)**(1/252) - 1 if annual_risk_free_rate != 0 else 0.0
     rolling_sortino = portfolio_returns.rolling(window=window).apply(
         lambda x: calculate_sortino_ratio(x, daily_required_return_for_empyrical=daily_rf_for_rolling_sortino),
-        raw=True 
+        raw=True
     ).dropna()
     rolling_sortino.name = f"Sortino Rodante ({window}d)"
-    
+
     return rolling_vol, rolling_sharpe, rolling_sortino
 
 def calculate_benchmark_metrics(portfolio_returns, benchmark_returns, risk_free_rate=0.0):
@@ -463,53 +463,53 @@ def calculate_benchmark_metrics(portfolio_returns, benchmark_returns, risk_free_
     try:
         common_index = portfolio_returns.index.intersection(benchmark_returns.index)
         if len(common_index) < 2: return {}
-        
+
         portfolio_returns_aligned = portfolio_returns.loc[common_index].replace([np.inf, -np.inf], np.nan).dropna()
         benchmark_returns_aligned = benchmark_returns.loc[common_index].replace([np.inf, -np.inf], np.nan).dropna()
-        
+
         # Re-alinear después de dropear NaNs individuales
         common_index_final = portfolio_returns_aligned.index.intersection(benchmark_returns_aligned.index)
         if len(common_index_final) < 2: return {}
-        
+
         portfolio_returns_aligned = portfolio_returns_aligned.loc[common_index_final]
         benchmark_returns_aligned = benchmark_returns_aligned.loc[common_index_final]
 
         # Empyrical espera la tasa libre de riesgo diaria para algunas funciones
         daily_rf = (1 + risk_free_rate)**(1/252) - 1 if risk_free_rate != 0 else 0.0
-        
+
         metrics['Beta'] = empyrical.beta(portfolio_returns_aligned, benchmark_returns_aligned, risk_free=daily_rf)
         metrics['Alpha (anual)'] = empyrical.alpha(portfolio_returns_aligned, benchmark_returns_aligned, risk_free=daily_rf, annualization=252) # Empyrical anualiza
-        
+
         excess_returns = portfolio_returns_aligned - benchmark_returns_aligned
         metrics['Tracking Error (anual)'] = excess_returns.std() * np.sqrt(252)
-        
+
         alpha_val, te_val = metrics.get('Alpha (anual)'), metrics.get('Tracking Error (anual)')
         if alpha_val is not None and te_val is not None and not pd.isna(alpha_val) and not pd.isna(te_val) and te_val != 0:
             metrics['Information Ratio'] = alpha_val / te_val
         else: metrics['Information Ratio'] = np.nan
-            
+
     except Exception as e: st.error(f"Error métricas vs benchmark: {e}")
     return metrics
 
 def calculate_rolling_beta(portfolio_returns, benchmark_returns, window):
     if portfolio_returns is None or benchmark_returns is None or portfolio_returns.empty or benchmark_returns.empty: return None
-    
+
     common_index = portfolio_returns.index.intersection(benchmark_returns.index)
     if window <= 1 or window > len(common_index): return None
-    
+
     try:
         portfolio_returns_aligned = portfolio_returns.loc[common_index]
         benchmark_returns_aligned = benchmark_returns.loc[common_index]
-        
+
         # Usar empyrical para beta rodante si es posible, o manual
         # Empyrical no tiene una función directa de beta rodante, así que se hace manual
         df_combined = pd.DataFrame({'portfolio': portfolio_returns_aligned, 'benchmark': benchmark_returns_aligned})
-        
+
         # Covarianza rodante entre cartera y benchmark
         rolling_cov = df_combined['portfolio'].rolling(window=window).cov(df_combined['benchmark'])
         # Varianza rodante del benchmark
         rolling_var = df_combined['benchmark'].rolling(window=window).var()
-        
+
         rolling_beta = (rolling_cov / rolling_var).replace([np.inf, -np.inf], np.nan).dropna()
         rolling_beta.name = f"Beta Rodante ({window}d)"
         return rolling_beta
@@ -517,33 +517,33 @@ def calculate_rolling_beta(portfolio_returns, benchmark_returns, window):
 
 def calculate_diversification_ratio(asset_returns, weights_dict):
     if asset_returns is None or asset_returns.empty or not weights_dict: return np.nan
-    
+
     funds_in_returns = [f for f in weights_dict.keys() if f in asset_returns.columns]
     if not funds_in_returns: return np.nan
-    
+
     weights_adj = np.array([weights_dict[f] for f in funds_in_returns])
     total_w = weights_adj.sum()
     if total_w <= 1e-9 : return np.nan
     weights_norm = weights_adj / total_w
-    
+
     asset_returns_subset = asset_returns[funds_in_returns].dropna() # Usar retornos limpios
     if asset_returns_subset.shape[0] < 2: return np.nan
 
     asset_vols = asset_returns_subset.std() * np.sqrt(252)
     if asset_vols.isnull().any() or (asset_vols == 0).any(): return np.nan # Evitar problemas con vol cero
-        
+
     weighted_avg_vol = np.sum(weights_norm * asset_vols)
     if weighted_avg_vol <= 1e-9: return np.nan # Evitar división por cero o resultados extraños
 
     cov_matrix = asset_returns_subset.cov() * 252
     if cov_matrix.isnull().values.any(): return np.nan
-        
+
     portfolio_var = weights_norm.T @ cov_matrix @ weights_norm
     if portfolio_var <= 1e-10: return np.nan # Varianza de cartera casi cero
     portfolio_vol = np.sqrt(portfolio_var)
-    
+
     if portfolio_vol <= 1e-9: return np.nan # Volatilidad de cartera casi cero
-        
+
     return weighted_avg_vol / portfolio_vol
 
 # --- NUEVAS FUNCIONES CUANTITATIVAS ---
@@ -575,7 +575,7 @@ def calculate_var_parametric(returns, confidence_level=0.99, dist_type='normal')
         # Asegurar que no hay NaNs antes de t.fit
         returns_cleaned_for_tfit = returns.dropna()
         if len(returns_cleaned_for_tfit) < 3 : return np.nan # t.fit necesita al menos 3 puntos
-        df, _, _ = t.fit(returns_cleaned_for_tfit) 
+        df, _, _ = t.fit(returns_cleaned_for_tfit)
         return t.ppf(1 - confidence_level, df=df, loc=mu, scale=sigma)
     return np.nan
 
@@ -627,7 +627,7 @@ def analyze_historical_scenario(portfolio_returns, all_asset_prices, weights_dic
     asset_columns_original = list(weights_dict.keys())
     # Filtrar solo los activos que existen en scenario_data
     asset_columns_in_scenario = [col for col in asset_columns_original if col in scenario_data.columns]
-    
+
     if not asset_columns_in_scenario:
         st.error(f"Ninguno de los activos de la cartera ({', '.join(asset_columns_original)}) tiene datos para el escenario histórico seleccionado.")
         return None, {}
@@ -642,14 +642,14 @@ def analyze_historical_scenario(portfolio_returns, all_asset_prices, weights_dic
     else: # Si los pesos de los activos disponibles suman cero
         st.error("Los pesos de los activos disponibles en el escenario suman cero. No se puede simular.")
         return None, {}
-        
-    if scenario_prices.isnull().values.any(): 
+
+    if scenario_prices.isnull().values.any():
         st.warning(f"Faltan datos para algunos activos en el escenario histórico incluso después de ffill/bfill. Resultados pueden ser imprecisos.")
         # No se eliminan columnas aquí, se manejará en el bucle de cálculo de valor
 
     scenario_portfolio_value = pd.Series(index=scenario_prices.index, dtype=float)
     if scenario_prices.empty: return None, {} # Doble chequeo
-    scenario_portfolio_value.iloc[0] = initial_investment_for_scenario 
+    scenario_portfolio_value.iloc[0] = initial_investment_for_scenario
 
     shares = {}
     for fund in asset_columns_in_scenario: # Usar solo los activos con datos en el escenario
@@ -657,7 +657,7 @@ def analyze_historical_scenario(portfolio_returns, all_asset_prices, weights_dic
         if pd.notna(initial_price) and initial_price != 0:
             shares[fund] = (initial_investment_for_scenario * weights_dict_scenario.get(fund, 0)) / initial_price
         else:
-            shares[fund] = 0 
+            shares[fund] = 0
 
     for i in range(1, len(scenario_prices)):
         current_val = 0
@@ -665,20 +665,20 @@ def analyze_historical_scenario(portfolio_returns, all_asset_prices, weights_dic
             current_price = scenario_prices[fund].iloc[i]
             if pd.notna(current_price):
                 current_val += shares.get(fund, 0) * current_price
-            else: 
+            else:
                 prev_price = scenario_prices[fund].iloc[i-1]
                 if pd.notna(prev_price):
                     current_val += shares.get(fund, 0) * prev_price
         scenario_portfolio_value.iloc[i] = current_val
-    
+
     scenario_portfolio_returns = scenario_portfolio_value.pct_change().dropna()
-    
-    metrics_scenario = calculate_metrics(scenario_portfolio_value, scenario_portfolio_returns, risk_free_rate_annual=0.0) 
+
+    metrics_scenario = calculate_metrics(scenario_portfolio_value, scenario_portfolio_returns, risk_free_rate_annual=0.0)
     return scenario_portfolio_value, metrics_scenario
 
 def run_monte_carlo_simulation(portfolio_returns, initial_investment, num_simulations, num_days_projection):
     """Ejecuta una simulación de Montecarlo para el valor futuro de la cartera."""
-    if portfolio_returns is None or portfolio_returns.empty or len(portfolio_returns) < 20: 
+    if portfolio_returns is None or portfolio_returns.empty or len(portfolio_returns) < 20:
         st.warning("Insuficientes retornos históricos para una simulación de Montecarlo fiable.")
         return None, None
 
@@ -696,14 +696,14 @@ def run_monte_carlo_simulation(portfolio_returns, initial_investment, num_simula
         price_series = [initial_investment]
         for r in daily_returns_sim:
             price_series.append(price_series[-1] * (1 + r))
-        simulations_df[f'Sim {i+1}'] = price_series[1:] 
+        simulations_df[f'Sim {i+1}'] = price_series[1:]
 
     last_date = portfolio_returns.index[-1] if not portfolio_returns.index.empty else pd.to_datetime('today')
-    sim_index = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=num_days_projection, freq='B') 
-    
+    sim_index = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=num_days_projection, freq='B')
+
     if len(sim_index) == simulations_df.shape[0]:
         simulations_df.index = sim_index
-    else: 
+    else:
         simulations_df.index = pd.RangeIndex(start=0, stop=len(simulations_df))
 
     final_values = simulations_df.iloc[-1]
@@ -763,7 +763,7 @@ def optimize_portfolio(prices, risk_free_rate=0.0, fixed_income_assets=None, mon
                 if mm_indices:
                     ef.add_constraint(lambda w: cp.sum(w[mm_indices]) <= 0.01)
                     # st.info(f"Restricción aplicada: Suma de pesos de Monetario ({', '.join(money_market_in_model)}) <= 1%.")
-        
+
         # MVP
         try:
             ef_min_vol = copy.deepcopy(ef)
@@ -785,7 +785,7 @@ def optimize_portfolio(prices, risk_free_rate=0.0, fixed_income_assets=None, mon
         try:
             if not (mu > risk_free_rate).any(): # Si ningún activo supera Rf, Max Sharpe puede ser problemático
                 st.warning("Ningún activo supera la tasa libre de riesgo; Max Sharpe puede ser igual a MVP o fallar.")
-            
+
             ef_max_sharpe = copy.deepcopy(ef)
             ef_max_sharpe.add_objective(objective_functions.L2_reg, gamma=0.1) # Regularización para estabilidad
             msr_weights_raw = ef_max_sharpe.max_sharpe(risk_free_rate=risk_free_rate)
@@ -807,13 +807,13 @@ def optimize_portfolio(prices, risk_free_rate=0.0, fixed_income_assets=None, mon
         try:
             ef_frontier_calc = copy.deepcopy(ef)
             n_samples = 100
-            
+
             # Determinar rango de retornos para la frontera
             # Usar el retorno del MVP como mínimo si está disponible y es razonable
             min_ret_for_frontier = mu.min()
             if results.get('mvp_performance') and results['mvp_performance']['expected_return'] > mu.min():
                 min_ret_for_frontier = results['mvp_performance']['expected_return']
-            
+
             max_ret_for_frontier = mu.max()
 
             if min_ret_for_frontier >= max_ret_for_frontier - 1e-4: # Si el rango es demasiado pequeño o inválido
@@ -822,7 +822,7 @@ def optimize_portfolio(prices, risk_free_rate=0.0, fixed_income_assets=None, mon
 
             target_returns = np.linspace(min_ret_for_frontier, max_ret_for_frontier, n_samples)
             frontier_volatility, frontier_sharpe = [], []
-            
+
             for target_ret in target_returns:
                 try:
                     ef_point = copy.deepcopy(ef_frontier_calc) # Usar una copia fresca para cada punto
@@ -833,7 +833,7 @@ def optimize_portfolio(prices, risk_free_rate=0.0, fixed_income_assets=None, mon
                 except (ValueError, cp.error.SolverError): # Si un punto es infactible
                     frontier_volatility.append(np.nan)
                     frontier_sharpe.append(np.nan)
-            
+
             frontier_df = pd.DataFrame({'Return': target_returns, 'Volatility': frontier_volatility, 'Sharpe': frontier_sharpe}).dropna().sort_values(by='Volatility')
             results['frontier_df'] = frontier_df
         except Exception as e_frontier:
@@ -864,13 +864,13 @@ default_session_state = {
     'data': None, 'weights': {}, 'run_results': None, 'last_uploaded_id': None,
     'benchmark_col': None, 'rolling_window': 60, 'risk_free_rate': RISK_FREE_RATE_DEFAULT,
     'fixed_income_selection': [], 'money_market_selection': [],
-    'transaction_cost_bps': 0.0, 
-    'var_confidence_level': CONFIDENCE_LEVEL_VAR_DEFAULT, 
-    'var_dist_type': 'histórica', 
-    'hypothetical_shock_pct': -10.0, 
-    'selected_historical_scenario': "Ninguno", 
-    'mc_num_simulations': 1000, 
-    'mc_projection_days': 252, 
+    'transaction_cost_bps': 0.0,
+    'var_confidence_level': CONFIDENCE_LEVEL_VAR_DEFAULT,
+    'var_dist_type': 'histórica',
+    'hypothetical_shock_pct': -10.0,
+    'selected_historical_scenario': "Ninguno",
+    'mc_num_simulations': 1000,
+    'mc_projection_days': 252,
 }
 for key, value in default_session_state.items():
     if key not in st.session_state:
@@ -885,7 +885,7 @@ if uploaded_file is not None:
     if st.session_state.last_uploaded_id != uploaded_file_id:
         st.session_state['data'] = load_data(uploaded_file)
         st.session_state.last_uploaded_id = uploaded_file_id
-        st.session_state['run_results'] = None 
+        st.session_state['run_results'] = None
         st.session_state['benchmark_col'] = None
         st.session_state['fixed_income_selection'] = []
         st.session_state['money_market_selection'] = []
@@ -901,7 +901,7 @@ if data is not None:
     st.sidebar.success(f"Archivo '{uploaded_file.name}' cargado.")
     st.sidebar.markdown("---")
     available_columns = data.columns.tolist()
-    
+
     common_benchmarks_ui = ['^GSPC', 'SPY', 'IBEX', '^IBEX', 'benchmark', 'indice', 'Benchmark', 'Index', 'MSCI World']
     detected_benchmark_index = 0
     saved_benchmark = st.session_state.get('benchmark_col')
@@ -913,7 +913,7 @@ if data is not None:
                 detected_benchmark_index = i; break
     st.session_state['benchmark_col'] = st.sidebar.selectbox("2. Selecciona la Columna Benchmark", options=available_columns, index=detected_benchmark_index, key='benchmark_selector')
     benchmark_col = st.session_state['benchmark_col']
-    
+
     asset_columns_for_selection = [col for col in available_columns if col != benchmark_col]
 
     st.sidebar.markdown("---")
@@ -940,10 +940,10 @@ if data is not None:
     st.sidebar.markdown("---")
 
     st.sidebar.subheader("Parámetros de Análisis")
-    try: 
+    try:
         filtered_len = len(data.loc[pd.to_datetime(start_date):pd.to_datetime(end_date)])
-        max_window_val = max(20, filtered_len - 5) if filtered_len > 25 else 20 
-    except Exception: max_window_val = 252*3 
+        max_window_val = max(20, filtered_len - 5) if filtered_len > 25 else 20
+    except Exception: max_window_val = 252*3
     default_window_val = min(st.session_state.get('rolling_window', 60), max_window_val) if max_window_val >= 20 else 20
     st.session_state['rolling_window'] = st.sidebar.number_input("7. Ventana Análisis Rodante (días)", min_value=20, max_value=max_window_val, value=default_window_val, step=10)
     st.session_state['risk_free_rate'] = st.sidebar.number_input("8. Tasa Libre de Riesgo Anual (%)", min_value=-10.0, max_value=25.0, value=st.session_state.get('risk_free_rate', RISK_FREE_RATE_DEFAULT) * 100 , step=0.1, format="%.2f") / 100.0
@@ -955,10 +955,10 @@ if data is not None:
     st.session_state['hypothetical_shock_pct'] = st.sidebar.number_input("Shock Hipotético de Mercado (%)", min_value=-99.0, max_value=50.0, value=st.session_state.get('hypothetical_shock_pct', -10.0), step=1.0, format="%.1f")
     st.session_state['selected_historical_scenario'] = st.sidebar.selectbox("Escenario Histórico de Crisis", options=list(HISTORICAL_SCENARIOS.keys()), index=list(HISTORICAL_SCENARIOS.keys()).index(st.session_state.get('selected_historical_scenario', "Ninguno")))
     st.sidebar.markdown("---")
-    
+
     st.sidebar.subheader("Simulación Montecarlo (Proyección Futura)")
     st.session_state['mc_num_simulations'] = st.sidebar.number_input("Nº Simulaciones Montecarlo", min_value=100, max_value=10000, value=st.session_state.get('mc_num_simulations', 1000), step=100)
-    st.session_state['mc_projection_days'] = st.sidebar.number_input("Días de Proyección Montecarlo", min_value=20, max_value=252*5, value=st.session_state.get('mc_projection_days', 252), step=10) 
+    st.session_state['mc_projection_days'] = st.sidebar.number_input("Días de Proyección Montecarlo", min_value=20, max_value=252*5, value=st.session_state.get('mc_projection_days', 252), step=10)
     st.sidebar.markdown("---")
 
     st.sidebar.subheader("9. Asignación de Pesos (%) [Excluye Benchmark]")
@@ -969,36 +969,36 @@ if data is not None:
         for fund in asset_columns_for_selection:
             default_weight = st.session_state['weights'].get(fund, 0.0) * 100 if fund in st.session_state['weights'] else 0.0
             weights_input[fund] = st.number_input(f"{fund}", min_value=0.0, max_value=100.0, value=default_weight, step=1.0, format="%.2f") / 100.0
-        
+
         submitted = st.form_submit_button("🚀 Ejecutar Análisis Completo")
 
         if submitted:
             st.session_state['weights'] = weights_input
             total_input_weight_sum = sum(weights_input.values())
             weights_norm = {}
-            if not np.isclose(total_input_weight_sum, 1.0, atol=0.01) and total_input_weight_sum > 1e-6 : 
+            if not np.isclose(total_input_weight_sum, 1.0, atol=0.01) and total_input_weight_sum > 1e-6 :
                 st.sidebar.warning(f"Pesos suman {total_input_weight_sum*100:.2f}%. Se normalizarán.")
                 weights_norm = {k: v / total_input_weight_sum for k, v in weights_input.items()}
-            elif np.isclose(total_input_weight_sum, 0.0, atol=1e-6): 
+            elif np.isclose(total_input_weight_sum, 0.0, atol=1e-6):
                 st.sidebar.error("Suma de pesos es 0%. Asigna pesos."); weights_norm = weights_input
-            else: 
+            else:
                 weights_norm = weights_input
 
-            active_weights = {k: v for k, v in weights_norm.items() if v > 1e-6} 
+            active_weights = {k: v for k, v in weights_norm.items() if v > 1e-6}
             if not active_weights:
                 st.error("No hay fondos con peso > 0 asignado.")
                 st.session_state['run_results'] = None
             else:
                 funds_in_portfolio = list(active_weights.keys())
-                cols_needed_for_backtest = funds_in_portfolio 
-                
+                cols_needed_for_backtest = funds_in_portfolio
+
                 all_cols_in_range = data.columns.tolist()
                 data_full_range_unfiltered = data.loc[pd.to_datetime(start_date):pd.to_datetime(end_date), all_cols_in_range].copy()
                 data_full_range_unfiltered.ffill(inplace=True); data_full_range_unfiltered.bfill(inplace=True)
 
                 asset_data_for_backtest = data.loc[pd.to_datetime(start_date):pd.to_datetime(end_date), cols_needed_for_backtest].copy()
                 asset_data_for_backtest.ffill(inplace=True); asset_data_for_backtest.bfill(inplace=True)
-                
+
                 if asset_data_for_backtest.empty or asset_data_for_backtest.shape[0] < 2:
                     st.error("No hay suficientes datos comunes para los activos de la cartera en el rango seleccionado tras limpiar NaNs.")
                     st.session_state['run_results'] = None
@@ -1007,10 +1007,10 @@ if data is not None:
                     st.session_state['run_results'] = None
                 else:
                     with st.spinner("Realizando cálculos avanzados y optimización..."):
-                        
+
                         portfolio_value, portfolio_returns, total_tx_costs = run_backtest(
                             asset_data_for_backtest, active_weights, initial_investment,
-                            asset_data_for_backtest.index.min(), asset_data_for_backtest.index.max(), 
+                            asset_data_for_backtest.index.min(), asset_data_for_backtest.index.max(),
                             rebalance_freq, st.session_state['transaction_cost_bps']
                         )
                         results_dict = {'run_successful': False}
@@ -1023,28 +1023,28 @@ if data is not None:
                             portfolio_metrics['Sortino Ratio'] = calculate_sortino_ratio(portfolio_returns, daily_required_return_for_empyrical=daily_rf_for_sortino_calc)
                             portfolio_metrics['Costes Totales Transacción (€)'] = total_tx_costs
                             portfolio_metrics['Costes Totales Transacción (%)'] = (total_tx_costs / initial_investment) if initial_investment > 0 else 0.0
-                            
+
                             asset_data_analysis = data_full_range_unfiltered[funds_in_portfolio].loc[portfolio_value.index]
                             individual_metrics = calculate_individual_metrics(asset_data_analysis, annual_rf_for_metrics)
-                            asset_returns = calculate_returns(asset_data_analysis) 
+                            asset_returns = calculate_returns(asset_data_analysis)
 
                             benchmark_data_analysis = None
                             benchmark_returns = None
                             individual_asset_benchmark_metrics = pd.DataFrame(index=funds_in_portfolio, columns=['Beta', 'Alpha (anual)'])
                             rolling_beta_portfolio = None
                             if benchmark_col and benchmark_col in data_full_range_unfiltered.columns:
-                                benchmark_data_analysis = data_full_range_unfiltered[benchmark_col].loc[portfolio_value.index] 
+                                benchmark_data_analysis = data_full_range_unfiltered[benchmark_col].loc[portfolio_value.index]
                                 benchmark_returns = calculate_returns(benchmark_data_analysis)
                                 if benchmark_returns is not None and not benchmark_returns.empty:
                                     common_idx_bm = portfolio_returns.index.intersection(benchmark_returns.index)
-                                    if len(common_idx_bm) >= max(2, st.session_state['rolling_window']): 
+                                    if len(common_idx_bm) >= max(2, st.session_state['rolling_window']):
                                         portfolio_returns_aligned_bm = portfolio_returns.loc[common_idx_bm]
                                         benchmark_returns_aligned_bm = benchmark_returns.loc[common_idx_bm]
-                                        
+
                                         benchmark_metrics_calc = calculate_benchmark_metrics(portfolio_returns_aligned_bm, benchmark_returns_aligned_bm, annual_rf_for_metrics)
                                         portfolio_metrics.update(benchmark_metrics_calc)
-                                        
-                                        temp_asset_bm_metrics = {} 
+
+                                        temp_asset_bm_metrics = {}
                                         if asset_returns is not None:
                                             for fund in funds_in_portfolio:
                                                 if fund in asset_returns.columns:
@@ -1055,25 +1055,25 @@ if data is not None:
                                                     else: temp_asset_bm_metrics[fund] = {'Beta': np.nan, 'Alpha (anual)': np.nan}
                                                 else: temp_asset_bm_metrics[fund] = {'Beta': np.nan, 'Alpha (anual)': np.nan}
                                             individual_asset_benchmark_metrics.update(pd.DataFrame(temp_asset_bm_metrics).T)
-                                        
+
                                         rolling_beta_portfolio = calculate_rolling_beta(portfolio_returns_aligned_bm, benchmark_returns_aligned_bm, st.session_state['rolling_window'])
                                     else: st.warning("Insuficientes datos comunes con benchmark para algunas métricas relativas.")
                                 else: st.warning("No se pudieron calcular retornos del benchmark.")
-                            
+
                             normalized_individual_prices = pd.DataFrame()
-                            if not asset_data_analysis.empty and (asset_data_analysis.iloc[0].abs() > 1e-9).all(): 
+                            if not asset_data_analysis.empty and (asset_data_analysis.iloc[0].abs() > 1e-9).all():
                                 normalized_individual_prices = asset_data_analysis / asset_data_analysis.iloc[0] * 100
-                            
+
                             normalized_portfolio_value = portfolio_value / portfolio_value.iloc[0] * 100
                             normalized_portfolio_value.name = "Cartera Total"
-                            
+
                             normalized_benchmark = None
                             if benchmark_data_analysis is not None and not benchmark_data_analysis.empty:
                                 first_bm_val = benchmark_data_analysis.iloc[0]
                                 if pd.notna(first_bm_val) and abs(first_bm_val) > 1e-9:
                                     normalized_benchmark = benchmark_data_analysis / first_bm_val * 100
                                     normalized_benchmark.name = benchmark_col
-                            
+
                             plot_data_normalized = pd.concat([normalized_portfolio_value, normalized_individual_prices], axis=1)
                             if normalized_benchmark is not None:
                                 plot_data_normalized = pd.concat([plot_data_normalized, normalized_benchmark], axis=1)
@@ -1090,7 +1090,7 @@ if data is not None:
                             var_param_dist_type = st.session_state['var_dist_type'] if st.session_state['var_dist_type'] != 'histórica' else 'normal'
                             var_param = calculate_var_parametric(portfolio_returns, st.session_state['var_confidence_level'], dist_type=var_param_dist_type)
                             es_param = calculate_es_parametric(portfolio_returns, st.session_state['var_confidence_level'], dist_type=var_param_dist_type)
-                            
+
                             advanced_risk_metrics = {
                                 f"VaR Histórico ({st.session_state['var_confidence_level']:.1%}) Diario": var_hist,
                                 f"ES Histórico ({st.session_state['var_confidence_level']:.1%}) Diario": es_hist,
@@ -1111,50 +1111,50 @@ if data is not None:
                             scenario_metrics = {}
                             if scenario_dates_selected:
                                 scenario_portfolio_evolution, scenario_metrics = analyze_historical_scenario(
-                                    portfolio_returns, 
-                                    data, 
-                                    active_weights, 
+                                    portfolio_returns,
+                                    data,
+                                    active_weights,
                                     scenario_dates_selected,
-                                    initial_investment_for_scenario=initial_investment 
+                                    initial_investment_for_scenario=initial_investment
                                 )
                             stress_test_results['historical_scenario'] = {
                                 'scenario_name': st.session_state['selected_historical_scenario'],
                                 'evolution': scenario_portfolio_evolution,
                                 'metrics': scenario_metrics
                             }
-                            
+
                             mc_simulations_df, mc_summary = run_monte_carlo_simulation(
-                                portfolio_returns, 
-                                portfolio_value.iloc[-1] if not portfolio_value.empty else initial_investment, 
+                                portfolio_returns,
+                                portfolio_value.iloc[-1] if not portfolio_value.empty else initial_investment,
                                 st.session_state['mc_num_simulations'],
                                 st.session_state['mc_projection_days']
                             )
 
                             mvp_weights, msr_weights, mvp_performance, msr_performance, frontier_df = optimize_portfolio(
-                                asset_data_analysis, 
+                                asset_data_analysis,
                                 risk_free_rate=annual_rf_for_metrics,
                                 fixed_income_assets=st.session_state['fixed_income_selection'],
                                 money_market_assets=st.session_state['money_market_selection']
                             )
 
-                            current_portfolio_performance_opt = None 
+                            current_portfolio_performance_opt = None
                             if active_weights and not asset_data_analysis.empty:
                                 try:
                                     prices_cleaned_opt = asset_data_analysis.apply(pd.to_numeric, errors='coerce').replace([np.inf, -np.inf], np.nan).dropna(axis=1, how='any')
                                     if not prices_cleaned_opt.empty and prices_cleaned_opt.shape[1] >=1 and prices_cleaned_opt.shape[0] >= 20:
                                         mu_current = expected_returns.mean_historical_return(prices_cleaned_opt, frequency=252)
                                         S_current = risk_models.CovarianceShrinkage(prices_cleaned_opt, frequency=252).ledoit_wolf()
-                                        
+
                                         weights_array = np.array([active_weights.get(asset, 0) for asset in prices_cleaned_opt.columns])
                                         weights_sum = weights_array.sum()
                                         weights_array_norm = weights_array / weights_sum if weights_sum > 1e-9 else weights_array
-                                        
+
                                         current_ret = pypfopt.objective_functions.portfolio_return(weights_array_norm, mu_current, negative=False)
-                                        current_variance = pypfopt.objective_functions.portfolio_variance(weights_array_norm, S_current) 
+                                        current_variance = pypfopt.objective_functions.portfolio_variance(weights_array_norm, S_current)
                                         current_vol = np.sqrt(current_variance) if current_variance >= 0 else np.nan
                                         current_sharpe = (current_ret - annual_rf_for_metrics) / current_vol if pd.notna(current_vol) and current_vol > 1e-9 else np.nan
                                         current_portfolio_performance_opt = {'expected_return': current_ret, 'annual_volatility': current_vol, 'sharpe_ratio': current_sharpe}
-                                except Exception: pass 
+                                except Exception: pass
 
 
                             results_dict = {
@@ -1165,10 +1165,10 @@ if data is not None:
                                 'rolling_vol': rolling_vol, 'rolling_sharpe': rolling_sharpe, 'rolling_sortino': rolling_sortino,
                                 'rolling_beta_portfolio': rolling_beta_portfolio, 'weights': active_weights, 'rolling_window_used': st.session_state['rolling_window'],
                                 'benchmark_col_used': benchmark_col if benchmark_data_analysis is not None and benchmark_returns is not None else None,
-                                'advanced_risk_metrics': advanced_risk_metrics, 
-                                'stress_test_results': stress_test_results, 
-                                'mc_simulations_df': mc_simulations_df, 
-                                'mc_summary': mc_summary, 
+                                'advanced_risk_metrics': advanced_risk_metrics,
+                                'stress_test_results': stress_test_results,
+                                'mc_simulations_df': mc_simulations_df,
+                                'mc_summary': mc_summary,
                                 'mvp_weights': mvp_weights, 'msr_weights': msr_weights, 'mvp_performance': mvp_performance,
                                 'msr_performance': msr_performance, 'frontier_df': frontier_df, 'current_portfolio_performance_opt': current_portfolio_performance_opt,
                                 'run_successful': True
@@ -1195,7 +1195,7 @@ if 'run_results' in st.session_state and st.session_state['run_results'] is not 
     rolling_vol, rolling_sharpe, rolling_sortino = results.get('rolling_vol'), results.get('rolling_sharpe'), results.get('rolling_sortino')
     rolling_beta_portfolio = results.get('rolling_beta_portfolio')
     rolling_window_used = results.get('rolling_window_used', 0)
-    
+
     advanced_risk_metrics = results.get('advanced_risk_metrics', {})
     stress_test_results = results.get('stress_test_results', {})
     mc_simulations_df = results.get('mc_simulations_df')
@@ -1214,24 +1214,24 @@ if 'run_results' in st.session_state and st.session_state['run_results'] is not 
     else:
         tabs = st.tabs(tabs_titles)
         tab_vg, tab_corr, tab_ar, tab_opt, tab_ra, tab_stress, tab_mc = tabs[0], tabs[1], tabs[2], tabs[3], tabs[4], tabs[5], tabs[6]
-        tab_bm = None 
+        tab_bm = None
 
     with tab_vg:
         st.header("Visión General de la Cartera")
         st.subheader("Métricas Principales (Cartera Total)")
-        try: locale.setlocale(locale.LC_ALL, 'es_ES.UTF-8') 
-        except locale.Error: locale.setlocale(locale.LC_ALL, '') 
+        try: locale.setlocale(locale.LC_ALL, 'es_ES.UTF-8')
+        except locale.Error: locale.setlocale(locale.LC_ALL, '')
 
         col1, col2, col3 = st.columns(3)
         col1.metric("Rentabilidad Total", f"{portfolio_metrics.get('Rentabilidad Total', np.nan):.2%}")
         col2.metric("Rentab. Anual (CAGR)", f"{portfolio_metrics.get('Rentabilidad Anualizada (CAGR)', np.nan):.2%}")
         col3.metric("Volatilidad Anualizada", f"{portfolio_metrics.get('Volatilidad Anualizada', np.nan):.2%}")
-        
+
         col1b, col2b, col3b = st.columns(3)
         col1b.metric("Máximo Drawdown", f"{portfolio_metrics.get('Máximo Drawdown', np.nan):.2%}")
         col2b.metric("Ratio de Sharpe", f"{portfolio_metrics.get('Ratio de Sharpe', np.nan):.2f}")
         col3b.metric("Ratio Sortino", f"{portfolio_metrics.get('Sortino Ratio', np.nan):.2f}")
-        
+
         col1c, col2c, col3c = st.columns(3)
         col1c.metric("Ratio Diversificación", f"{portfolio_metrics.get('Diversification Ratio', np.nan):.2f}", help="Vol. media pond. activos / Vol. Cartera")
         col2c.metric("Costes Transacción (€)", f"{portfolio_metrics.get('Costes Totales Transacción (€)', 0.0):,.2f}")
@@ -1245,7 +1245,7 @@ if 'run_results' in st.session_state and st.session_state['run_results'] is not 
                 fig_perf.update_layout(xaxis_title="Fecha", yaxis_title="Valor Normalizado", legend_title_text='Activos')
                 st.plotly_chart(fig_perf, use_container_width=True)
         else: st.warning("No hay datos para gráfico de evolución.")
-        
+
         st.markdown("---"); st.subheader(f"Análisis Rodante de la Cartera (Ventana: {rolling_window_used} días)")
         col_roll1, col_roll2, col_roll3 = st.columns(3)
         with col_roll1:
@@ -1277,7 +1277,7 @@ if 'run_results' in st.session_state and st.session_state['run_results'] is not 
                 fig.update_layout(showlegend=False, yaxis_title="Beta"); st.plotly_chart(fig, use_container_width=True)
             else: st.warning("Insuficientes datos comunes con benchmark para Beta rodante.")
 
-    with tab_corr: 
+    with tab_corr:
         st.header("Análisis de Correlación entre Activos")
         st.subheader("Matriz de Correlación (Período Completo)")
         if corr_matrix is not None and not corr_matrix.empty:
@@ -1287,12 +1287,12 @@ if 'run_results' in st.session_state and st.session_state['run_results'] is not 
                 ax.set_title('Correlación entre Activos'); plt.xticks(rotation=45, ha='right', fontsize=8); plt.yticks(rotation=0, fontsize=8)
                 plt.tight_layout(); st.pyplot(fig_heatmap)
         else: st.warning("No se pudo calcular matriz de correlación.")
-        
+
         st.markdown("---"); st.subheader(f"Correlación Rodante (Ventana: {rolling_window_used} días)")
         if avg_rolling_corr is not None and not avg_rolling_corr.empty:
             fig = px.line(avg_rolling_corr, title="Correlación Promedio Rodante entre Activos", labels={'value': 'Corr. Promedio'})
             fig.update_layout(showlegend=False, yaxis_title="Correlación Promedio"); st.plotly_chart(fig, use_container_width=True)
-            
+
             asset_list_corr = results.get('asset_returns').columns.tolist() if results.get('asset_returns') is not None else []
             if len(asset_list_corr) >= 2:
                 pair_options = [(asset_list_corr[i], asset_list_corr[j]) for i in range(len(asset_list_corr)) for j in range(i + 1, len(asset_list_corr))]
@@ -1305,7 +1305,7 @@ if 'run_results' in st.session_state and st.session_state['run_results'] is not 
                             fig_pair.update_layout(yaxis_title="Correlación", legend_title_text='Pares'); st.plotly_chart(fig_pair, use_container_width=True)
         else: st.warning("Datos insuficientes para correlación rodante.")
 
-    with tab_ar: 
+    with tab_ar:
         st.header("Análisis de Activos Individuales y Riesgo de Cartera")
         st.subheader("Posicionamiento Riesgo/Retorno (Activos vs Cartera)")
         if individual_metrics is not None and not individual_metrics.empty and portfolio_metrics:
@@ -1315,10 +1315,10 @@ if 'run_results' in st.session_state and st.session_state['run_results'] is not 
             valid_cols_scatter = ['Rentab. Anual (CAGR)', 'Volatilidad Anualizada']
             if all(col in scatter_data.columns for col in valid_cols_scatter):
                 scatter_data.dropna(subset=valid_cols_scatter, inplace=True)
-            
+
             portfolio_scatter = pd.DataFrame({
-                'Rentab. Anual (CAGR)': [portfolio_metrics.get('Rentabilidad Anualizada (CAGR)')], 
-                'Volatilidad Anualizada': [portfolio_metrics.get('Volatilidad Anualizada')]}, 
+                'Rentab. Anual (CAGR)': [portfolio_metrics.get('Rentabilidad Anualizada (CAGR)')],
+                'Volatilidad Anualizada': [portfolio_metrics.get('Volatilidad Anualizada')]},
                 index=['Cartera Total'])
             portfolio_scatter['Rentab. Anual (CAGR)'] = pd.to_numeric(portfolio_scatter['Rentab. Anual (CAGR)'], errors='coerce')
             portfolio_scatter['Volatilidad Anualizada'] = pd.to_numeric(portfolio_scatter['Volatilidad Anualizada'], errors='coerce')
@@ -1331,7 +1331,7 @@ if 'run_results' in st.session_state and st.session_state['run_results'] is not 
                     fig.update_traces(textposition='top center'); fig.update_layout(xaxis_title="Volatilidad Anualizada", yaxis_title="Rentab. Anual (CAGR)", xaxis_tickformat=".1%", yaxis_tickformat=".1%")
                     st.plotly_chart(fig, use_container_width=True)
         else: st.warning("Faltan métricas para gráfico Riesgo/Retorno.")
-        
+
         st.markdown("---"); st.subheader("Contribución de Activos a la Volatilidad de Cartera")
         if risk_contribution is not None and not risk_contribution.empty:
             risk_contribution_pct = (risk_contribution * 100).reset_index(); risk_contribution_pct.columns = ['Activo', 'Contribución al Riesgo (%)']
@@ -1339,7 +1339,7 @@ if 'run_results' in st.session_state and st.session_state['run_results'] is not 
             fig.update_traces(texttemplate='%{text:.2f}%', textposition='outside'); fig.update_layout(yaxis_title="Contribución (%)", xaxis_title="Activo")
             st.plotly_chart(fig, use_container_width=True)
         else: st.warning("No se pudo calcular contribución al riesgo.")
-        
+
         st.markdown("---"); st.subheader("Ranking Avanzado de Activos")
         if individual_metrics is not None and not individual_metrics.empty:
             ranking_df = individual_metrics.T.copy()
@@ -1347,11 +1347,11 @@ if 'run_results' in st.session_state and st.session_state['run_results'] is not 
                 ranking_df = ranking_df.join((risk_contribution.rename('Contribución Riesgo (%)') * 100), how='left')
             if benchmark_col_used and individual_asset_benchmark_metrics is not None and not individual_asset_benchmark_metrics.empty:
                 ranking_df = ranking_df.join(individual_asset_benchmark_metrics[['Beta', 'Alpha (anual)']], how='left')
-            
+
             if 'Ratio de Sharpe' in ranking_df.columns:
                 ranking_df['Ratio de Sharpe'] = pd.to_numeric(ranking_df['Ratio de Sharpe'], errors='coerce')
                 ranking_df.sort_values(by='Ratio de Sharpe', ascending=False, inplace=True, na_position='last')
-            
+
             ranking_display = ranking_df.copy()
             fmt_pct = lambda x: f"{x:.2%}" if pd.notna(x) else "N/A"; fmt_flt = lambda x: f"{x:.2f}" if pd.notna(x) else "N/A"; fmt_pct_risk = lambda x: f"{x:.2f}%" if pd.notna(x) else "N/A"
             cols_pct = ['Rentabilidad Total', 'Rentabilidad Anualizada (CAGR)', 'Volatilidad Anualizada', 'Máximo Drawdown', 'Alpha (anual)']
@@ -1365,7 +1365,7 @@ if 'run_results' in st.session_state and st.session_state['run_results'] is not 
             st.dataframe(ranking_display, use_container_width=True)
         else: st.warning("Faltan datos para ranking avanzado.")
 
-    with tab_opt: 
+    with tab_opt:
         st.header("🔬 Optimización de Cartera (Frontera Eficiente)")
         st.markdown("Basado en datos históricos del periodo seleccionado. Solo posiciones largas. Las restricciones de Renta Fija/Monetario se aplican aquí.")
         if frontier_df is not None and not frontier_df.empty:
@@ -1379,7 +1379,7 @@ if 'run_results' in st.session_state and st.session_state['run_results'] is not 
                 fig_frontier.add_trace(go.Scatter(x=[current_portfolio_performance_opt['annual_volatility']], y=[current_portfolio_performance_opt['expected_return']], mode='markers+text', marker=dict(color='orange', size=12, symbol='circle'), text="Actual", textposition="bottom center", name=f"Tu Cartera (Sharpe: {current_portfolio_performance_opt['sharpe_ratio']:.2f})"))
             fig_frontier.update_layout(title='Frontera Eficiente y Carteras Óptimas', xaxis_title='Volatilidad Anualizada (Riesgo)', yaxis_title='Rentabilidad Esperada Anualizada', xaxis_tickformat=".1%", yaxis_tickformat=".1%", legend_title_text='Carteras', height=500)
             st.plotly_chart(fig_frontier, use_container_width=True)
-            
+
             st.markdown("---"); st.subheader("Pesos Sugeridos por Optimización")
             col_opt1, col_opt2 = st.columns(2)
             with col_opt1:
@@ -1411,14 +1411,14 @@ if 'run_results' in st.session_state and st.session_state['run_results'] is not 
 
     with tab_stress:
         st.header("📉 Pruebas de Estrés y Análisis de Escenarios")
-        
+
         st.subheader(f"Shock Hipotético de Mercado ({st.session_state['hypothetical_shock_pct']:.1f}%)")
         hypo_shock_res = stress_test_results.get('hypothetical_shock', {})
         if hypo_shock_res.get('ultimo_valor_cartera') is not None and not pd.isna(hypo_shock_res['ultimo_valor_cartera']):
             st.metric(label="Último Valor de Cartera (Pre-Shock)", value=f"{hypo_shock_res['ultimo_valor_cartera']:,.2f} €")
             st.metric(label="Valor de Cartera Estimado (Post-Shock)", value=f"{hypo_shock_res['valor_cartera_post_shock']:,.2f} €",
                       delta=f"{hypo_shock_res['perdida_absoluta_shock']:,.2f} € ({st.session_state['hypothetical_shock_pct']:.1f}%)",
-                      delta_color="inverse") 
+                      delta_color="inverse")
         else:
             st.warning("No se pudo calcular el shock hipotético (datos de cartera no disponibles).")
         st.markdown("---")
@@ -1430,9 +1430,9 @@ if 'run_results' in st.session_state and st.session_state['run_results'] is not 
         elif hist_scenario_res.get('evolution') is not None and not hist_scenario_res['evolution'].empty:
             evo_df = hist_scenario_res['evolution']
             metrics_scen = hist_scenario_res.get('metrics', {})
-            
+
             st.markdown(f"**Rendimiento Simulado de la Cartera Actual Durante el Escenario ({evo_df.index.min().date()} a {evo_df.index.max().date()})**")
-            
+
             col_scen1, col_scen2, col_scen3 = st.columns(3)
             col_scen1.metric("Rentabilidad Total en Escenario", f"{metrics_scen.get('Rentabilidad Total', np.nan):.2%}")
             col_scen2.metric("Máximo Drawdown en Escenario", f"{metrics_scen.get('Máximo Drawdown', np.nan):.2%}")
@@ -1443,21 +1443,21 @@ if 'run_results' in st.session_state and st.session_state['run_results'] is not 
             st.plotly_chart(fig_scenario, use_container_width=True)
         elif st.session_state['selected_historical_scenario'] != "Ninguno":
             st.warning(f"No se pudieron obtener datos para el escenario '{st.session_state['selected_historical_scenario']}'.")
-            
+
     with tab_mc:
         st.header("🎰 Simulación de Montecarlo (Proyección Futura)")
         if mc_simulations_df is not None and not mc_simulations_df.empty and mc_summary:
             st.markdown(f"Proyección a **{st.session_state['mc_projection_days']} días hábiles** ({st.session_state['mc_num_simulations']} simulaciones) basada en retornos históricos de la cartera.")
-            
+
             fig_mc = go.Figure()
             num_lines_to_plot = min(100, st.session_state['mc_num_simulations'])
             for col in mc_simulations_df.columns[:num_lines_to_plot]:
                 fig_mc.add_trace(go.Scatter(x=mc_simulations_df.index, y=mc_simulations_df[col], mode='lines', line=dict(width=0.5, color='lightblue'), showlegend=False))
-            
+
             fig_mc.add_trace(go.Scatter(x=mc_simulations_df.index, y=mc_simulations_df.mean(axis=1), mode='lines', line=dict(width=2, color='blue'), name='Media'))
             fig_mc.add_trace(go.Scatter(x=mc_simulations_df.index, y=mc_simulations_df.quantile(0.05, axis=1), mode='lines', line=dict(width=1, color='red', dash='dash'), name='Percentil 5%'))
             fig_mc.add_trace(go.Scatter(x=mc_simulations_df.index, y=mc_simulations_df.quantile(0.95, axis=1), mode='lines', line=dict(width=1, color='green', dash='dash'), name='Percentil 95%'))
-            
+
             fig_mc.update_layout(title="Distribución de Valores Futuros de Cartera (Montecarlo)", xaxis_title="Fecha Proyectada", yaxis_title="Valor de Cartera (€)", height=500)
             st.plotly_chart(fig_mc, use_container_width=True)
 
@@ -1476,7 +1476,7 @@ if 'run_results' in st.session_state and st.session_state['run_results'] is not 
 
 elif 'run_results' not in st.session_state or st.session_state['run_results'] is None:
     if data is not None: st.info("Configura parámetros y haz clic en '🚀 Ejecutar Análisis Completo'.")
-    elif uploaded_file is not None: pass 
+    elif uploaded_file is not None: pass
     else: st.info("Por favor, carga un archivo CSV para comenzar.")
 elif not st.session_state['run_results'].get('run_successful', False):
     st.error("La ejecución del análisis falló. Revisa mensajes de error o los parámetros de entrada.")
